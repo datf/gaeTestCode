@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Main{% endblock %}
+{% block head %}
+    {{ super() }}
+    <script src='/_ah/channel/jsapi'></script>
+{% endblock %}
+{% block content %}
+    <h1>Index</h1>
+    <p class="important">
+      Welcome on my awesome homepage.
+    </p>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script src="js/jquery.flot.min.js"></script>
+  <script>
+    var channel = new goog.appengine.Channel('{{ token }}');
+    var socket = channel.open();
+    var user_token = '{{ user_token }}';
+    var last_state;
+    var connected;
+    onMessage = function(m) {
+      console.log(m)
+      data = JSON.parse(m.data);
+      console.log(data)
+    }
+    sendMessage = function(path, opt_param) {
+      path += '?user_token=' + user_token;
+      if (opt_param) {
+        path += '&' + opt_param;
+      }
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', path, true);
+      xhr.send();
+    };
+
+    onOpened = function() {
+      connected = true;
+      sendMessage('opened');
+      //updateBoard();
+    };
+    socket.onopen = onOpened;
+    socket.onmessage = onMessage;
+    //socket.onerror = onError;
+    //socket.onclose = onClose;
+  </script>
+{% endblock %}
