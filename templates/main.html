@@ -9,39 +9,89 @@
     <p class="important">
       Welcome on my awesome homepage.
     </p>
+    <div id="flotchart" style="width:600px; height: 300px">
+    </div>
 {% endblock %}
 {% block scripts %}
   {{ super() }}
   <script src="js/jquery.flot.min.js"></script>
+  <script src="js/jquery.flot.time.min.js"></script>
   <script>
-    var channel = new goog.appengine.Channel('{{ token }}');
-    var socket = channel.open();
+      function plotData()
+      {
+          $.plot($flotchart, [data_plotted], options);
+          try
+          {
+              console.log((new Date()));
+              console.log(new Date(data_plotted[0][0]));
+          } catch(e) {}
+      }
+      function getLocalDate(d)
+      {
+      }
+  </script>
+  <script>
     var user_token = '{{ user_token }}';
     var last_state;
+    var data_plotted = [];
     var connected;
+    var $flotchart = $('#flotchart');
+    var plot_interval = setInterval(plotData, 1000);
+    var options = {
+          'lines': {'show': 'true'},
+          'points': {'show': 'true'},
+          'clickable': true,
+          'hoverable': true
+      }
     onMessage = function(m) {
-      console.log(m)
       data = JSON.parse(m.data);
-      console.log(data)
+      //console.log(data)
+      var timestamp_date = new Date(data.last_data.timestamp)
+      var timestamp = timestamp_date.getTime();
+      var current_weight = parseFloat(data.last_data.current_total_weight);
+      if (!last_state)
+      {
+          options['xaxis'] = {
+              mode: 'time',
+              minTickSize: [10, 'second'],
+          }
+          last_state = data;
+      }
+      data_plotted.push([timestamp, current_weight - last_state.last_data.current_total_weight]);
+      a_minute_ago = new Date(data.last_data.timestamp)
+      a_minute_ago.setMinutes(timestamp_date.getMinutes() - 1)
+      a_minute_ago = a_minute_ago.getTime()
+      options['xaxis']['min'] = a_minute_ago
+      while (data_plotted[0][0] < a_minute_ago)
+      {
+          data_plotted.shift();
+      }
+      last_state = data;
+      //console.log(data_plotted)
     }
     sendMessage = function(path, opt_param) {
       path += '?user_token=' + user_token;
-      if (opt_param) {
-        path += '&' + opt_param;
-      }
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', path, true);
-      xhr.send();
+      jQuery.post(path, opt_param, function(data, textStatus, xhr){console.log(data + textStatus)});
     };
 
     onOpened = function() {
       connected = true;
       sendMessage('opened');
+      console.log('opened!!!')
       //updateBoard();
     };
+    onError = function(m) {
+        console.log('Error: ' + m);
+    }
+    onClose = function() {
+        console.log('Connection closed');
+        connected = false;
+    }
+    var channel = new goog.appengine.Channel('{{ token }}');
+    var socket = channel.open();
     socket.onopen = onOpened;
     socket.onmessage = onMessage;
-    //socket.onerror = onError;
-    //socket.onclose = onClose;
+    socket.onerror = onError;
+    socket.onclose = onClose;
   </script>
 {% endblock %}

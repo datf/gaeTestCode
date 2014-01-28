@@ -1,6 +1,8 @@
 import webapp2
 import json
 import datetime
+import logging
+from utils.jsondataencoder import JSONDateEncoder
 from model.conveyordata import ConveyorData
 from model.conveyorreset import ConveyorReset
 from google.appengine.api import channel
@@ -13,10 +15,6 @@ class DialogHandler(webapp2.RequestHandler):
     Class for keeping the clients updated and listening to the reset button
     message
     """
-    @staticmethod
-    def date_handler(obj):
-        return obj.isoformat() if hasattr(obj, 'isoformat') else obj
-
     def get(self):
         last_data = ConveyorData\
                 .query()\
@@ -32,17 +30,20 @@ class DialogHandler(webapp2.RequestHandler):
                 .fetch(1)\
                 or\
                 (ConveyorReset(current_total_weight=0),)
-        ret = {'last_data': last_data[0].to_dict(),
-                'last_reset': last_reset[0].to_dict()
+        ret = {'last_data': last_data[0],
+                'last_reset': last_reset[0]
                 }
         self.response.out.write(json.dumps(ret,
-                    default=self.date_handler))
+                    cls=JSONDateEncoder))
 
     def post(self):
-        if self.request.get('user_token'):
+        to = memcache.get('clients') or []
+        user_token = self.request.get('user_token')
+        if user_token:
             #TODO: Refresh client on table
+            #to = [{'user_token' : user_token}]
             pass
-        elif self.request.get('reset'):
+        if self.request.get('reset'):
             current_total_weight = 0
             current_reset = ConveyorData\
                     .query()\
@@ -53,11 +54,11 @@ class DialogHandler(webapp2.RequestHandler):
             reset = ConveyorReset(current_total_weight = current_total_weight)
             reset.put()
             memcache.set('last_reset', reset)
-        else:
+        elif self.request.get('status'):
             timestamp = datetime.datetime.strptime(
                     self.request.get('timestamp'),
-                    '%Y-%m-%d %H:%M:%S.%f'
-                    )
+                    '%Y-%m-%d %H:%M:%S.%f %z'
+                    ) if self.request.get('timestamp') else None
             current_total_weight = \
                 float(self.request.get('current_total_weight'))
             status = self.request.get('status')
@@ -73,14 +74,20 @@ class DialogHandler(webapp2.RequestHandler):
                 'last_data': memcache.get('last_data') or {},
                 'last_reset': memcache.get('last_reset') or {},
                 }
-        notify_clients(message)
-        #deferred.defer(notify_clients, message)
+        #logging.info('sending {} to {}'.format(message, to))
+        #notify_clients(message, to)
+        deferred.defer(notify_clients, message, to)
 
-def notify_clients(message):
-    clients = memcache.get('clients') or []
+def notify_clients(message, clients):
+    now = datetime.datetime.now()
     for i in clients:
-        channel.send_message(i['user_token'], message)
+        if 'created' in i:
+            elapsed = now - i['created']
+            if elapsed.total_seconds() > 2 * 60 * 60:
+                break
 
+        channel.send_message(i['user_token'], json.dumps(message,
+                                                cls=JSONDateEncoder))
 
 class MainPage(webapp2.RequestHandler):
 
@@ -97,7 +104,8 @@ class MainPage(webapp2.RequestHandler):
 
         template_values = {
                 'token': token,
-                'user_token': user_token
+                'user_token': user_token,
+                'created': datetime.datetime.now()
                 }
 
         ret = None
@@ -109,7 +117,8 @@ class MainPage(webapp2.RequestHandler):
             ret = '<h1>Generic error: {}</h1>'.format(repr(ex))
 
         clients = memcache.get('clients') or []
-        memcache.set('clients', clients.append(template_values))
+        clients.append(template_values)
+        memcache.set('clients', clients)
 
         self.response.out.write(ret)
 

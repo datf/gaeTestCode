@@ -56,8 +56,8 @@ Default: mock_data.csv')
             'status': 'Working'
             }
     while True:
-        values['timestamp'] = datetime.datetime.now()
-        values['current_total_weight'] += random.random() * 10
+        values['timestamp'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f %z')
+        values['current_total_weight'] += random.random() * 100
         values['status'] = 'Working' if random.random() > .1 else 'Stopped'
         data = urllib.urlencode(values)
         try:
@@ -66,5 +66,7 @@ Default: mock_data.csv')
         except urllib2.URLError as ex:
             print 'Error sending to URL: {}\n\t{}'.format(args.url, ex)
             exit_gracefully(1)
-        print 'Data sent:', values
-        time.sleep(1)
+        print 'Data sent:', data
+        time.sleep(random.random() * 5)
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
