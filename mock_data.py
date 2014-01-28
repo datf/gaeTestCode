@@ -56,7 +56,8 @@ Default: mock_data.csv')
             'status': 'Working'
             }
     while True:
-        values['timestamp'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f %z')
+        values['timestamp'] = datetime.datetime.utcnow()\
+                .strftime('%Y-%m-%d %H:%M:%S.%f')
         values['current_total_weight'] += random.random() * 100
         values['status'] = 'Working' if random.random() > .1 else 'Stopped'
         data = urllib.urlencode(values)

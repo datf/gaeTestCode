@@ -6,7 +6,7 @@ class JSONDateEncoder(json.JSONEncoder):
         if isinstance(obj, ndb.Model):
             return obj.to_dict()
         elif hasattr(obj, 'isoformat'):
-            return obj.isoformat()
+            return obj.isoformat(' ') + ' +0000'
         else:
             return json.JSONEncoder.default(self, obj)
 

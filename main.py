@@ -44,20 +44,20 @@ class DialogHandler(webapp2.RequestHandler):
             #to = [{'user_token' : user_token}]
             pass
         if self.request.get('reset'):
-            current_total_weight = 0
-            current_reset = ConveyorData\
+            current_total_weight = 0.0
+            current_data = ConveyorData\
                     .query()\
-                    .order(-ConveyorData.current_total_weight)\
+                    .order(-ConveyorData.timestamp)\
                     .fetch(1)
-            if len(current_reset) > 0:
-                current_total_weight = current_reset[0].current_total_weight
+            if len(current_data) > 0:
+                current_total_weight = current_data[0].current_total_weight
             reset = ConveyorReset(current_total_weight = current_total_weight)
             reset.put()
             memcache.set('last_reset', reset)
         elif self.request.get('status'):
             timestamp = datetime.datetime.strptime(
                     self.request.get('timestamp'),
-                    '%Y-%m-%d %H:%M:%S.%f %z'
+                    '%Y-%m-%d %H:%M:%S.%f'
                     ) if self.request.get('timestamp') else None
             current_total_weight = \
                 float(self.request.get('current_total_weight'))

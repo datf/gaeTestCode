@@ -6,10 +6,40 @@
 {% endblock %}
 {% block content %}
     <h1>Index</h1>
-    <p class="important">
-      Welcome on my awesome homepage.
-    </p>
-    <div id="flotchart" style="width:600px; height: 300px">
+    <div class='row'>
+        <div class='col-lg-12'>
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Last Machine Time</th>
+                <th>Time Since Last Reset</th>
+                <th>Weight Moved</th>
+                <th>Weight Move Rate (lbs / sec)</th>
+                <th>Last Know Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span id="last-machine-time"></span></td>
+                <td><span id="time-since-last-reset"></span></td>
+                <td><span id="weight-moved"></span></td>
+                <td><span id="weight-move-rate"></span></td>
+                <td><span id="last-status"></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+    </div>
+    <div class='row'>
+        <div class="col-lg-8">
+            <div id="flotchart" style="width:600px; height: 300px">
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <button id="btn-reset" type="button" class="btn-lg btn-danger">
+                Reset
+            </button>
+        </div>
     </div>
 {% endblock %}
 {% block scripts %}
@@ -19,15 +49,19 @@
   <script>
       function plotData()
       {
-          $.plot($flotchart, [data_plotted], options);
-          try
+          if (data_plotted.length <= 0)
+              return;
+          now = new Date();
+          a_minute_ago = new Date()
+          a_minute_ago.setMinutes(now.getMinutes() - 1)
+          a_minute_ago = a_minute_ago.getTime()
+          options['xaxis']['min'] = a_minute_ago
+          options['xaxis']['max'] = now.getTime() + 3000
+          while (data_plotted.length > 1 && data_plotted[1][0] < a_minute_ago)
           {
-              console.log((new Date()));
-              console.log(new Date(data_plotted[0][0]));
-          } catch(e) {}
-      }
-      function getLocalDate(d)
-      {
+              data_plotted.shift();
+          }
+          $.plot($flotchart, [data_plotted], options);
       }
   </script>
   <script>
@@ -36,16 +70,35 @@
     var data_plotted = [];
     var connected;
     var $flotchart = $('#flotchart');
-    var plot_interval = setInterval(plotData, 1000);
+    var plot_interval = setInterval(plotData, 500);
     var options = {
           'lines': {'show': 'true'},
           'points': {'show': 'true'},
           'clickable': true,
           'hoverable': true
       }
+    updateStats = function(data) {
+        console.log('updating stats');
+        var lasttime = new Date(data.last_data.timestamp).toString();
+        $('#last-machine-time').html(lasttime);
+        $('#last-status').html(data.last_data.status);
+        if (data.last_reset && data.last_reset.timestamp)
+        {
+            var now = new Date();
+            console.log(data.last_reset);
+            var last_reset = new Date(data.last_reset.timestamp);
+            var elapsed = (now.getTime() - last_reset.getTime()) / 1000;
+            var txt_elapsed = Math.floor(elapsed) + ' seconds';
+            $('#time-since-last-reset').html(txt_elapsed);
+            weigth_moved = data.last_data.current_total_weight
+                - data.last_reset.current_total_weight;
+            $('#weight-moved').html(weigth_moved);
+            $('#weight-move-rate').html(weigth_moved / elapsed);
+        }
+    }
     onMessage = function(m) {
       data = JSON.parse(m.data);
-      //console.log(data)
+      updateStats(data);
       var timestamp_date = new Date(data.last_data.timestamp)
       var timestamp = timestamp_date.getTime();
       var current_weight = parseFloat(data.last_data.current_total_weight);
@@ -57,21 +110,14 @@
           }
           last_state = data;
       }
-      data_plotted.push([timestamp, current_weight - last_state.last_data.current_total_weight]);
-      a_minute_ago = new Date(data.last_data.timestamp)
-      a_minute_ago.setMinutes(timestamp_date.getMinutes() - 1)
-      a_minute_ago = a_minute_ago.getTime()
-      options['xaxis']['min'] = a_minute_ago
-      while (data_plotted[0][0] < a_minute_ago)
-      {
-          data_plotted.shift();
-      }
+      data_plotted.push([timestamp,
+                    current_weight - last_state.last_data.current_total_weight]
+                    );
       last_state = data;
-      //console.log(data_plotted)
     }
     sendMessage = function(path, opt_param) {
       path += '?user_token=' + user_token;
-      jQuery.post(path, opt_param, function(data, textStatus, xhr){console.log(data + textStatus)});
+      jQuery.post(path, opt_param);
     };
 
     onOpened = function() {
@@ -80,12 +126,16 @@
       console.log('opened!!!')
       //updateBoard();
     };
-    onError = function(m) {
-        console.log('Error: ' + m);
+    onError = function(args) {
+        // Usually the errors are caused by the channel timing out (as it has a
+        // live of 2 hours, or the server being restarted, so waiting a few
+        // seconds to reload the page...
+        setTimeout('location.reload()', 5000);
     }
     onClose = function() {
         console.log('Connection closed');
         connected = false;
+        clearInterval(plot_interval);
     }
     var channel = new goog.appengine.Channel('{{ token }}');
     var socket = channel.open();
@@ -93,5 +143,6 @@
     socket.onmessage = onMessage;
     socket.onerror = onError;
     socket.onclose = onClose;
+    $('#btn-reset').click(function(){sendMessage('opened', 'reset=1')});
   </script>
 {% endblock %}
