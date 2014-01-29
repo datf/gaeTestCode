@@ -24,6 +24,7 @@ The web application runs on Google App Engine. You can go to the
 [downloads page](https://developers.google.com/appengine/downloads) to get
 a copy of the latest SDK and instructions on how to get it working locally.
 The file app.yaml is provided for using it with the dev_appserver.py script.
-The incoming data simulator can be run with ```bash
+The incoming data simulator can be run with:
+```bash
 python mock_data.py
 ```
