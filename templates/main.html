@@ -63,10 +63,13 @@
   <script src="js/jquery.flot.min.js"></script>
   <script src="js/jquery.flot.time.min.js"></script>
   <script>
+    /* Function for sorting the data_plotted array */
     function sortPlotting(a, b)
     {
         return a[0] - b[0];
     }
+    /* Function that displays the data for the last minute
+        and marks the last reset */
     function plotData()
     {
         if (data_plotted.length <= 0)
@@ -77,11 +80,14 @@
         a_minute_ago = a_minute_ago.getTime();
         options['xaxis']['min'] = a_minute_ago;
         options['xaxis']['max'] = now.getTime();
+        // Removing all previous points that are not plotted but for one
+        // in order to still plot a line
         while (data_plotted.length > 1 && data_plotted[1][0] < a_minute_ago)
         {
             data_plotted.shift();
       }
       updateTimeSinceLastReset();
+      // If we have a last_reset paint a mark vertically
       if (last_state && last_state.last_reset && last_state.last_reset.timestamp)
       {
           var last_reset = new Date(last_state.last_reset.timestamp);
@@ -106,11 +112,16 @@
     var data_plotted = [];
     var connected;
     var $flotchart = $('#flotchart');
+    // Setting the graph to be plotted two times per second
     var plot_interval = setInterval(plotData, 500);
     var time_sync = 0;
     var options = {
           'lines': {'show': 'true'},
           'points': {'show': 'true'},
+          'xaxis': {
+              mode: 'time',
+              minTickSize: [10, 'second'],
+          }
       }
     getSecondsSinceLastReset = function() {
         if (!last_state || !last_state.last_reset || !last_state.last_reset.timestamp)
@@ -122,9 +133,11 @@
         var elapsed = (now.getTime() - last_reset.getTime() - time_sync) / 1000;
         return Math.floor(elapsed);
     }
+    // Function for formatting numbers with a leading zero
     getTwoDigits = function(num) {
         return num.toLocaleString('en', {minimumIntegerDigits:2});
     }
+    // Function for updating the Time Since Last Reset counter.
     updateTimeSinceLastReset = function() {
         var since_last_reset = getSecondsSinceLastReset();
         if (since_last_reset === false)
@@ -147,6 +160,7 @@
 
         $('#time-since-last-reset').html(txt_elapsed);
     }
+    // Function for updating the stats (Last Machine Time, Known Status, etc.)
     updateStats = function(data) {
         var lasttime = new Date(data.last_data.timestamp).toString();
         $('#last-machine-time').html(lasttime);
@@ -164,9 +178,9 @@
                             );
         }
     }
+    // Function that is called when new data comes from the channel.
     onMessage = function(m) {
       var data = JSON.parse(m.data);
-      console.log(data)
       //If we get a first message that doesn't contain the previous data, it
       //shouldn't count as the first.
       if (!last_state && !data.previous)
@@ -182,29 +196,23 @@
       var timestamp_date = new Date(data.last_data.timestamp)
       var timestamp = timestamp_date.getTime();
       var current_weight = parseFloat(data.last_data.current_total_weight);
+      // If this is the first message, we have to add the previous points
       if (!last_state)
       {
-          options['xaxis'] = {
-              mode: 'time',
-              minTickSize: [10, 'second'],
-          }
           last_state = data;
-          if (data.previous)
+          data_plotted = [];
+          var last_weight = 0;
+          for (var d in data.previous.reverse())
           {
-              data_plotted = [];
-              var last_weight = 0;
-              for (var d in data.previous.reverse())
-              {
-                  var record = data.previous[d];
-                  ts = new Date(record.timestamp);
-                  var this_weight = parseFloat(record.current_total_weight);
-                  data_plotted.push([
-                                ts.getTime() + time_sync,
-                                this_weight - last_weight
-                            ]);
-                  last_weight = this_weight;
-                  last_state.last_data = record;
-              }
+              var record = data.previous[d];
+              ts = new Date(record.timestamp);
+              var this_weight = parseFloat(record.current_total_weight);
+              data_plotted.push([
+                            ts.getTime() + time_sync,
+                            this_weight - last_weight
+                        ]);
+              last_weight = this_weight;
+              last_state.last_data = record;
           }
       }
       data_plotted.push([timestamp + time_sync,
@@ -222,6 +230,7 @@
 
     onOpened = function() {
       connected = true;
+      // Sending message for requesting the previous data (points).
       sendMessage('opened', 'new=1');
     };
     onError = function(args) {
@@ -234,12 +243,15 @@
         connected = false;
         clearInterval(plot_interval);
     }
+    // Setting up GAE Channel
     var channel = new goog.appengine.Channel('{{ token }}');
     var socket = channel.open();
     socket.onopen = onOpened;
     socket.onmessage = onMessage;
     socket.onerror = onError;
     socket.onclose = onClose;
+
+    // Binding for AJaX call on clicking the Reset Counter button
     $('#btn-reset').click(function(){sendMessage('opened', 'reset=1')});
   </script>
 {% endblock %}

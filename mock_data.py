@@ -4,6 +4,7 @@ import time
 import datetime
 import random
 import json
+import logging
 import urllib
 import urllib2
 
@@ -15,6 +16,11 @@ def exit_gracefully(ret=0):
     sys.exit(ret)
 
 if __name__ == '__main__':
+    # You can change logging level to INFO to get some information on the data
+    # received and sent
+    logging.basicConfig(stream=sys.stdout, level=logging.WARNING,
+            format='%(message)s')
+
     parser = argparse.ArgumentParser(
     description='This is the script for simulating the incoming data.\n\
 If a file is specified then the CSV data on that file will be posted.\n\
@@ -25,9 +31,6 @@ If no file is passed, random data is generated and sent every second.',
 Default: http://localhost:8080/opened',
             default='http://localhost:8080/opened',
             nargs='?')
-    parser.add_argument('-f','--file',
-            help='CSV File to load the data from.\n\
-Default: mock_data.csv')
     args = parser.parse_args()
 
     try:
@@ -36,17 +39,17 @@ Default: mock_data.csv')
                 signal.SIGINT, signal.SIGTERM):
             signal.signal(i, lambda a,b: exit_gracefully())
     except:
-        pass #Not UNIX/like
+        pass #Not UNIX/like system
 
     res = None
     try:
         res = urllib2.urlopen(args.url)
     except urllib2.URLError as ex:
-        print 'Error accessing URL: {}\n\t{}'.format(args.url, ex.message)
+        logging.error('Error accessing URL: {}\n\t{}'.format(args.url, ex.message))
         exit_gracefully(1)
 
     res = res.read()
-    print res
+    logging.info('Data got from the server: {}'.format(res))
     conveyor_data = json.loads(res)
     current_total_weight = 0
     if conveyor_data['last_data']:
@@ -55,7 +58,7 @@ Default: mock_data.csv')
     values = {
             'timestamp': None,
             'current_total_weight': current_total_weight,
-            'status': 'Working'
+            'status': None
             }
     while True:
         values['timestamp'] = datetime.datetime.utcnow()\
@@ -67,9 +70,9 @@ Default: mock_data.csv')
             req = urllib2.Request(args.url, data)
             res = urllib2.urlopen(req)
         except urllib2.URLError as ex:
-            print 'Error sending to URL: {}\n\t{}'.format(args.url, ex)
+            loggin.error('Error sending to URL: {}\n\t{}'.format(args.url, ex))
             exit_gracefully(1)
-        print 'Data sent:', data
+        logging.info('Data sent: {}'.format(data))
         time.sleep(random.random() * 5)
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4

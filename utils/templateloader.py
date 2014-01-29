@@ -1,8 +1,6 @@
 import os
 import jinja2
 
-#__all__ = ['MAIN_PAGE', 'JinjaTemplate', 'JinjaTemplateNotFoundException']
-
 class JinjaTemplate(object):
     """
     The JinjaTemplate class provides a wrapper of the jinja2 environment to load
@@ -40,5 +38,8 @@ class JinjaTemplate(object):
         """
         return self._template.render(*args, **kwargs)
 
-class JinjaTemplateNotFoundException(Exception):
+class JinjaTemplateNotFoundException(jinja2.TemplateNotFound):
+    """
+    Exception to present to users of this module instead of jinja2's
+    """
     pass

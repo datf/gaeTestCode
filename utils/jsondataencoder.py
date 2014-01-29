@@ -2,6 +2,10 @@ import json
 from google.appengine.ext import ndb
 
 class JSONDateEncoder(json.JSONEncoder):
+    """
+    Class for transforming dates to ISO Format plus timestamp and
+    also ndb.Models to a python dict form when encoding in JSON
+    """
     def default(self, obj):
         if isinstance(obj, ndb.Model):
             return obj.to_dict()

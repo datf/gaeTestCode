@@ -25,10 +25,23 @@ class DialogHandler(webapp2.RequestHandler):
                 }
 
     def get(self):
+        """
+        Method called on HTTP GET /opened
+        Writes {"last_data": ..., "last_reset": ...}
+        """
         self.response.out.write(json.dumps(self._get_latest_data(),
                     cls=JSONDateEncoder))
 
     def post(self):
+        """
+        Method called on HTTP POST /opened
+        If 'reset' is passed it will add a reset mark.
+        If 'status' is passed then:
+        - It expects also 'timestamp' with the Conveyor Machine data.
+        - Expects 'current_total_weight'.
+        - The new data is scheduled to be sent via channel to all clients.
+        If 'new' is passed is a request for the old data (via channel).
+        """
         to = memcache.get('clients') or []
         if self.request.get('reset'):
             current_total_weight = 0.0
@@ -58,9 +71,16 @@ class DialogHandler(webapp2.RequestHandler):
         if self.request.get('new'):
             to = [{'user_token':self.request.get('user_token')}]
             message['previous'] = ConveyorData.get_most_recent(30, 1)
+        # The response via channel to clients in the 'to' array
         deferred.defer(notify_clients, message, to)
 
 def notify_clients(message, clients):
+    """
+    Function (usually deferred) to send the message to the clients via
+    Google App Engine's Channel API
+    Channels only last open for two hours so, here, all clients subscribed
+    more than two hours ago are deleted from the array.
+    """
     now = datetime.datetime.now()
     to_remove = []
     for i in clients:
@@ -80,8 +100,17 @@ def notify_clients(message, clients):
     memcache.set('clients', c)
 
 class MainPage(webapp2.RequestHandler):
+    """
+    Handler from the main page
+    """
 
     def get(self):
+        """
+        Handler for HTTP GET /
+        Creates the user token and writes back the templated data
+        with the information needed for the client to connect to the
+        Channel API.
+        """
 
         user_token = self.request.get('user_token')
 
