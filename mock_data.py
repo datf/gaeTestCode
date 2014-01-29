@@ -48,7 +48,9 @@ Default: mock_data.csv')
     res = res.read()
     print res
     conveyor_data = json.loads(res)
-    current_total_weight = conveyor_data['last_data']['current_total_weight']
+    current_total_weight = 0
+    if conveyor_data['last_data']:
+        current_total_weight = conveyor_data['last_data']['current_total_weight']
 
     values = {
             'timestamp': None,

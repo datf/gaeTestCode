@@ -11,14 +11,17 @@ class BaseConveyor(ndb.Model):
         memcache.set(self.cached_name, future.get_result().get())
 
     @classmethod
-    def get_most_recent(cls):
-        from_memcache = memcache.get(cls.cached_name)
-        if from_memcache:
-            return from_memcache
-        result = cls.query().order(-cls.timestamp).fetch(1)
-        if len(result) > 0:
+    def get_most_recent(cls, num=1, offset=0):
+        if num == 1:
+            from_memcache = memcache.get(cls.cached_name)
+            if from_memcache:
+                return from_memcache
+        result = cls.query().order(-cls.timestamp).fetch(num, offset=offset)
+        if len(result) == 1:
             memcache.set(cls.cached_name, result[0])
             return result[0]
+        elif len(result) > 1:
+            return result
         return None
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4

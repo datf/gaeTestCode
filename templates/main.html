@@ -41,6 +41,22 @@
             </button>
         </div>
     </div>
+    <!-- Modal -->
+    <div class="modal fade" id="progressModal" role="dialog" aria-hidden="true" data-backdrop="static">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h4 class="modal-title" id="myModalLabel">Please wait while loading data</h4>
+          </div>
+          <div class="modal-body">
+            <div class="progress progress-striped active">
+              <div class="progress-bar"  role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+              </div>
+            </div>
+          </div>
+        </div><!-- /.modal-content -->
+      </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
 {% endblock %}
 {% block scripts %}
   {{ super() }}
@@ -80,8 +96,10 @@
           'hoverable': true
       }
     getSecondsSinceLastReset = function() {
-        if (!last_state)
-            return;
+        if (!last_state.last_reset.timestamp)
+        {
+            return false;
+        }
         var now = new Date();
         var last_reset = new Date(last_state.last_reset.timestamp);
         var elapsed = (now.getTime() - last_reset.getTime() - time_sync) / 1000;
@@ -92,6 +110,11 @@
     }
     updateTimeSinceLastReset = function() {
         var since_last_reset = getSecondsSinceLastReset();
+        if (since_last_reset === false)
+        {
+            $('#time-since-last-reset').html('None recorded');
+            return false;
+        }
         var sec = since_last_reset % 60;
         var min = Math.floor(since_last_reset / 60 % 60);
         var hr = Math.floor(since_last_reset / 60 / 60 % 60);
@@ -140,6 +163,23 @@
               minTickSize: [10, 'second'],
           }
           last_state = data;
+          if (data.previous)
+          {
+              data_plotted = [];
+              var last_weight = 0;
+              for (var d in data.previous.reverse())
+              {
+                  var record = data.previous[d];
+                  ts = new Date(record.timestamp);
+                  var this_weight = parseFloat(record.current_total_weight);
+                  data_plotted.push([
+                                ts.getTime() + time_sync,
+                                this_weight - last_weight
+                            ]);
+                  last_weight = this_weight;
+                  last_state.last_data = record;
+              }
+          }
       }
       data_plotted.push([timestamp + time_sync,
                     current_weight - last_state.last_data.current_total_weight]
@@ -148,13 +188,15 @@
     }
     sendMessage = function(path, opt_param) {
       path += '?user_token=' + user_token;
-      jQuery.post(path, opt_param);
+      $('#progressModal').modal();
+      jQuery.post(path, opt_param)
+          .done(function(){$('#progressModal').modal('hide');})
+          .fail(function(){$('#progressModal').modal('hide');});
     };
 
     onOpened = function() {
       connected = true;
       sendMessage('opened');
-      console.log('opened!!!')
       //updateBoard();
     };
     onError = function(args) {
@@ -164,7 +206,6 @@
         setTimeout('location.reload()', 5000);
     }
     onClose = function() {
-        console.log('Connection closed');
         connected = false;
         clearInterval(plot_interval);
     }
