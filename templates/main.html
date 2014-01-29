@@ -63,25 +63,44 @@
   <script src="js/jquery.flot.min.js"></script>
   <script src="js/jquery.flot.time.min.js"></script>
   <script>
-      function plotData()
-      {
-          if (data_plotted.length <= 0)
-              return;
-          now = new Date();
-          a_minute_ago = new Date();
-          a_minute_ago.setMinutes(now.getMinutes() - 1);
-          a_minute_ago = a_minute_ago.getTime();
-          options['xaxis']['min'] = a_minute_ago;
-          options['xaxis']['max'] = now.getTime();
-          while (data_plotted.length > 1 && data_plotted[1][0] < a_minute_ago)
-          {
-              data_plotted.shift();
-          }
-          updateTimeSinceLastReset();
-          $.plot($flotchart, [data_plotted], options);
+    function sortPlotting(a, b)
+    {
+        return a[0] - b[0];
+    }
+    function plotData()
+    {
+        if (data_plotted.length <= 0)
+            return;
+        now = new Date();
+        a_minute_ago = new Date();
+        a_minute_ago.setMinutes(now.getMinutes() - 1);
+        a_minute_ago = a_minute_ago.getTime();
+        options['xaxis']['min'] = a_minute_ago;
+        options['xaxis']['max'] = now.getTime();
+        while (data_plotted.length > 1 && data_plotted[1][0] < a_minute_ago)
+        {
+            data_plotted.shift();
       }
-  </script>
-  <script>
+      updateTimeSinceLastReset();
+      if (last_state && last_state.last_reset && last_state.last_reset.timestamp)
+      {
+          var last_reset = new Date(last_state.last_reset.timestamp);
+          var marker = last_reset.getTime() + time_sync;
+          options['grid'] = {
+              'markings': [
+                {
+                    color: '#bb0000',
+                    lineWidth: 1,
+                    xaxis: {
+                        'from': marker,
+                        'to': marker
+                    }
+                }
+              ]
+          }
+      }
+      $.plot($flotchart, [data_plotted.sort(sortPlotting)], options);
+    }
     var user_token = '{{ user_token }}';
     var last_state;
     var data_plotted = [];
@@ -92,8 +111,6 @@
     var options = {
           'lines': {'show': 'true'},
           'points': {'show': 'true'},
-          'clickable': true,
-          'hoverable': true
       }
     getSecondsSinceLastReset = function() {
         if (!last_state || !last_state.last_reset || !last_state.last_reset.timestamp)
@@ -149,6 +166,15 @@
     }
     onMessage = function(m) {
       var data = JSON.parse(m.data);
+      console.log(data)
+      //If we get a first message that doesn't contain the previous data, it
+      //shouldn't count as the first.
+      if (!last_state && !data.previous)
+      {
+          //Trying again after 50ms is the best option
+          setTimeout(function(){onMessage(m)}, 50);
+          return;
+      }
       var now_sync = new Date();
       var srv_sync = new Date(data.now);
       time_sync = now_sync.getTime() - srv_sync.getTime();
@@ -196,8 +222,7 @@
 
     onOpened = function() {
       connected = true;
-      sendMessage('opened');
-      //updateBoard();
+      sendMessage('opened', 'new=1');
     };
     onError = function(args) {
         // Usually the errors are caused by the channel timing out (as it has a

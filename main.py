@@ -30,7 +30,6 @@ class DialogHandler(webapp2.RequestHandler):
 
     def post(self):
         to = memcache.get('clients') or []
-        user_token = self.request.get('user_token')
         if self.request.get('reset'):
             current_total_weight = 0.0
             current_data = ConveyorData.get_most_recent()
@@ -38,6 +37,8 @@ class DialogHandler(webapp2.RequestHandler):
                 current_total_weight = current_data.current_total_weight
             reset = ConveyorReset(current_total_weight = current_total_weight)
             reset.put()
+            #Exit the function not to send messages back to the clients
+            return
         elif self.request.get('status'):
             timestamp = datetime.datetime.strptime(
                     self.request.get('timestamp'),
@@ -54,7 +55,8 @@ class DialogHandler(webapp2.RequestHandler):
                     status=status)
             conveyor_data.put()
         message = self._get_latest_data()
-        if user_token:
+        if self.request.get('new'):
+            to = [{'user_token':self.request.get('user_token')}]
             message['previous'] = ConveyorData.get_most_recent(30, 1)
         deferred.defer(notify_clients, message, to)
 
