@@ -7,6 +7,7 @@ import json
 import logging
 import urllib
 import urllib2
+import sys
 
 def exit_gracefully(ret=0):
     """
