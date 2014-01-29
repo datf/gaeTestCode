@@ -96,7 +96,7 @@
           'hoverable': true
       }
     getSecondsSinceLastReset = function() {
-        if (!last_state.last_reset.timestamp)
+        if (!last_state || !last_state.last_reset || !last_state.last_reset.timestamp)
         {
             return false;
         }
