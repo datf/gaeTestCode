@@ -34,8 +34,8 @@ Entering Data
 
 In order to integrate with the system for entering data, a HTTP POST request
 has to be made to /opened containing the following HTTP parameters:
-- **timestamp**: The timestamp (number of seconds since Jan 1st 1970 at
-00:00:00 UTC)
+- **timestamp**: The timestamp of the machine (number of seconds since Jan 1st 
+1970 at 00:00:00 UTC)
 - **current_total_weight**: A double that indicates the total weight read on 
 the machine.
 - **status**: A string informing of the current status of the machine.
