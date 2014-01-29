@@ -15,25 +15,17 @@ class DialogHandler(webapp2.RequestHandler):
     Class for keeping the clients updated and listening to the reset button
     message
     """
-    def get(self):
-        last_data = ConveyorData\
-                .query()\
-                .order(-ConveyorData.timestamp)\
-                .fetch(1)\
-                or\
-                (ConveyorData(timestamp=datetime.datetime.now(),
-                    current_total_weight=0,
-                    status=''),)
-        last_reset = ConveyorReset\
-                .query()\
-                .order(-ConveyorReset.timestamp)\
-                .fetch(1)\
-                or\
-                (ConveyorReset(current_total_weight=0),)
-        ret = {'last_data': last_data[0],
-                'last_reset': last_reset[0]
+
+    @staticmethod
+    def _get_latest_data():
+        return {
+                'last_data': ConveyorData.get_most_recent() or {},
+                'last_reset': ConveyorReset.get_most_recent() or {},
+                'now': datetime.datetime.utcnow()
                 }
-        self.response.out.write(json.dumps(ret,
+
+    def get(self):
+        self.response.out.write(json.dumps(self._get_latest_data(),
                     cls=JSONDateEncoder))
 
     def post(self):
@@ -45,15 +37,11 @@ class DialogHandler(webapp2.RequestHandler):
             pass
         if self.request.get('reset'):
             current_total_weight = 0.0
-            current_data = ConveyorData\
-                    .query()\
-                    .order(-ConveyorData.timestamp)\
-                    .fetch(1)
-            if len(current_data) > 0:
-                current_total_weight = current_data[0].current_total_weight
+            current_data = ConveyorData.get_most_recent()
+            if current_data:
+                current_total_weight = current_data.current_total_weight
             reset = ConveyorReset(current_total_weight = current_total_weight)
             reset.put()
-            memcache.set('last_reset', reset)
         elif self.request.get('status'):
             timestamp = datetime.datetime.strptime(
                     self.request.get('timestamp'),
@@ -69,25 +57,27 @@ class DialogHandler(webapp2.RequestHandler):
                     current_total_weight=current_total_weight,
                     status=status)
             conveyor_data.put()
-            memcache.set('last_data', conveyor_data)
-        message = {
-                'last_data': memcache.get('last_data') or {},
-                'last_reset': memcache.get('last_reset') or {},
-                }
-        #logging.info('sending {} to {}'.format(message, to))
-        #notify_clients(message, to)
+        message = self._get_latest_data()
         deferred.defer(notify_clients, message, to)
 
 def notify_clients(message, clients):
     now = datetime.datetime.now()
+    to_remove = []
     for i in clients:
         if 'created' in i:
             elapsed = now - i['created']
             if elapsed.total_seconds() > 2 * 60 * 60:
-                break
-
+                to_remove.append(i)
+                continue
+        #Let every client know the server's datetime for syncing.
+        #Since this job can be deferred the time needs to be updated.
+        message['now'] = datetime.datetime.utcnow()
         channel.send_message(i['user_token'], json.dumps(message,
                                                 cls=JSONDateEncoder))
+    c = memcache.get('clients')
+    for i in to_remove:
+        c.remove(i)
+    memcache.set('clients', c)
 
 class MainPage(webapp2.RequestHandler):
 

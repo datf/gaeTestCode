@@ -5,7 +5,7 @@
     <script src='/_ah/channel/jsapi'></script>
 {% endblock %}
 {% block content %}
-    <h1>Index</h1>
+    <h1>Conveyor Machine</h1>
     <div class='row'>
         <div class='col-lg-12'>
           <table class="table table-striped">
@@ -37,7 +37,7 @@
         </div>
         <div class="col-lg-4">
             <button id="btn-reset" type="button" class="btn-lg btn-danger">
-                Reset
+                Reset Counter
             </button>
         </div>
     </div>
@@ -52,15 +52,16 @@
           if (data_plotted.length <= 0)
               return;
           now = new Date();
-          a_minute_ago = new Date()
-          a_minute_ago.setMinutes(now.getMinutes() - 1)
-          a_minute_ago = a_minute_ago.getTime()
-          options['xaxis']['min'] = a_minute_ago
-          options['xaxis']['max'] = now.getTime() + 3000
+          a_minute_ago = new Date();
+          a_minute_ago.setMinutes(now.getMinutes() - 1);
+          a_minute_ago = a_minute_ago.getTime();
+          options['xaxis']['min'] = a_minute_ago;
+          options['xaxis']['max'] = now.getTime();
           while (data_plotted.length > 1 && data_plotted[1][0] < a_minute_ago)
           {
               data_plotted.shift();
           }
+          updateTimeSinceLastReset();
           $.plot($flotchart, [data_plotted], options);
       }
   </script>
@@ -71,33 +72,63 @@
     var connected;
     var $flotchart = $('#flotchart');
     var plot_interval = setInterval(plotData, 500);
+    var time_sync = 0;
     var options = {
           'lines': {'show': 'true'},
           'points': {'show': 'true'},
           'clickable': true,
           'hoverable': true
       }
+    getSecondsSinceLastReset = function() {
+        if (!last_state)
+            return;
+        var now = new Date();
+        var last_reset = new Date(last_state.last_reset.timestamp);
+        var elapsed = (now.getTime() - last_reset.getTime() - time_sync) / 1000;
+        return Math.floor(elapsed);
+    }
+    getTwoDigits = function(num) {
+        return num.toLocaleString('en', {minimumIntegerDigits:2});
+    }
+    updateTimeSinceLastReset = function() {
+        var since_last_reset = getSecondsSinceLastReset();
+        var sec = since_last_reset % 60;
+        var min = Math.floor(since_last_reset / 60 % 60);
+        var hr = Math.floor(since_last_reset / 60 / 60 % 60);
+        var txt_elapsed = getTwoDigits(sec) + ' seconds';
+        if (hr > 0)
+        {
+            txt_elapsed = hr + ':' + getTwoDigits(min) + ':' + getTwoDigits(sec);
+        }
+        else if (min > 0)
+        {
+            txt_elapsed = getTwoDigits(min) + ' minutes, ' + txt_elapsed;
+        }
+
+        $('#time-since-last-reset').html(txt_elapsed);
+    }
     updateStats = function(data) {
-        console.log('updating stats');
         var lasttime = new Date(data.last_data.timestamp).toString();
         $('#last-machine-time').html(lasttime);
         $('#last-status').html(data.last_data.status);
         if (data.last_reset && data.last_reset.timestamp)
         {
-            var now = new Date();
-            console.log(data.last_reset);
-            var last_reset = new Date(data.last_reset.timestamp);
-            var elapsed = (now.getTime() - last_reset.getTime()) / 1000;
-            var txt_elapsed = Math.floor(elapsed) + ' seconds';
-            $('#time-since-last-reset').html(txt_elapsed);
             weigth_moved = data.last_data.current_total_weight
                 - data.last_reset.current_total_weight;
-            $('#weight-moved').html(weigth_moved);
-            $('#weight-move-rate').html(weigth_moved / elapsed);
+            $('#weight-moved').html(
+                            weigth_moved.toLocaleString()
+                            );
+            var since_last_reset = getSecondsSinceLastReset();
+            $('#weight-move-rate').html(
+                            (weigth_moved / since_last_reset).toLocaleString()
+                            );
         }
     }
     onMessage = function(m) {
-      data = JSON.parse(m.data);
+      var data = JSON.parse(m.data);
+      var now_sync = new Date();
+      var srv_sync = new Date(data.now);
+      time_sync = now_sync.getTime() - srv_sync.getTime();
       updateStats(data);
       var timestamp_date = new Date(data.last_data.timestamp)
       var timestamp = timestamp_date.getTime();
@@ -110,7 +141,7 @@
           }
           last_state = data;
       }
-      data_plotted.push([timestamp,
+      data_plotted.push([timestamp + time_sync,
                     current_weight - last_state.last_data.current_total_weight]
                     );
       last_state = data;
