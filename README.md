@@ -39,3 +39,8 @@ has to be made to /opened containing the following HTTP parameters:
 - **current_total_weight**: A double that indicates the total weight read on 
 the machine.
 - **status**: A string informing of the current status of the machine.
+
+Interface
+---------
+
+A screen capture of the interface can be found under the screen_shot folder.
